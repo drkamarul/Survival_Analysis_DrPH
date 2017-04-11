@@ -1,0 +1,373 @@
+---
+title: "Non And Semi Parametric Survival Analysis - DrPH(Epid)"
+author: "Kamarul Imran Musa"
+date: "18 April 2016"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: yes
+  pdf_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+# Cox proportional hazard model
+
+## Introduction
+
+### The coxph function
+
+The Cox proportional-hazards regression model can be fit in R with the `survival::coxph` function.
+
+The argumen *method* indicates how to handle observations that have tied (i.e., identical) survival times. The default "efron" method is generally preferred to the once-popular "breslow" method.
+
+# Initial preparation
+
+## Prepare folder and file
+
+Set the working directory to store all the working datasets and also the outputs. 
+
+```{r}
+setwd("E:/Epi_Stat_Matters/LectureNotes2015/Survival-Analysis/survival-analysis-DrPH-epid-2015/Practicals/Survival_Analysis_DrPH/NonAndSemiParametricSurvivalAnalysis")
+
+list.files()
+```
+
+## Read data
+
+We can use `foreigh::read.dta` to read stata format data. 
+
+```{r readdata}
+library(foreign)
+data1<-read.dta('addicts.dta',convert.factors = T)
+```
+
+## Load library 
+
+The popular package to run survival analysis in R is `survival`package. We can load the package using the `library` function
+
+```{r}
+library(survival)
+```
+
+# Preliminary analysis
+
+## Declare file as a survival data format
+
+It is important to tell R that the data for survival analysis is in the time-to-event format. We need to specify:
+
+1.  variable time
+2.  variable event. What would be the event of interest. The rest will be censored observations. 
+
+When can see the summary of the data
+
+```{r}
+datas <- Surv(time = data1$survt,event = data1$status == 1)
+summary(datas)
+
+```
+
+## Overview of data
+
+Let us see the first 50 observations for the 
+
+1.  time-to-event data
+2.  the original data
+
+```{r}
+head(datas,50)
+head(data1,50)
+```
+
++ sign is for censored observation
+
+# Estimation of the survival based on non-parametric method
+
+To estimate the expected survival probability, we can use the non-parametric method. The most popular one is the Kaplan-Meier survival estimate. 
+
+## Estimate the crude (unadjusted) survival functions for all 
+
+Using the intercept-only model to obtain Kaplan-Meier survival estimates for all event times. 
+
+```{r kaplan1}
+surv.fit<-survfit(datas~1, data = data1)
+summary(surv.fit)
+```
+
+And also for a specific time for example the expected survival at time 100.
+
+```{r kaplan2}
+summary(surv.fit,times = 100)
+```
+
+## Estimate crude (unadjusted) survival functions for strata
+
+For each clinic
+
+```{r kaplan3}
+surv.clin<-survfit(datas~clinic, data = data1)
+summary(surv.clin)
+```
+
+For time = 100
+
+```{r kaplan4}
+summary(surv.clin,times = 100)
+```
+
+## Kaplan-Meier survival plots 
+
+We will plot the survival probability against time for all observations
+
+```{r}
+plot(surv.fit, xlab='survival times (days)', ylab='survival prob')
+```
+
+We will plot the survival probability against time for observations based on clinic.
+
+```{r}
+str(data1$clinic)
+str(data1$prison)
+```
+
+Let us plot. Note that the *solid* line and *black* color belong to clinic1 and the *dashed* line with *red* color belong to clinic2 
+
+```{r plotnolegend}
+plot(surv.clin, lty=c('solid','dashed'), col=c('black','red'))
+```
+
+Now, we add legend
+
+```{r addlegend}
+plot(surv.clin, lty=c('solid','dashed'), col=c('black','red'))
+legend('topright',c('clinic 1','clinic 2'),lty=c('solid','dashed'), col=c('black','red'))
+```
+
+## Inferences based on Kaplan-Meier survival estimates
+
+### The log rank test
+
+To test for the difference in the estimated survival times by the Kaplan-Meier, the default is the log-rank test
+
+```{r}
+survdiff(datas~clinic, data = data1)
+```
+
+# Estimation using the Semi-parametric method
+
+The most common semi-parametric method to estimate the survival probability is the Cox proportional hazard regression model
+
+## The Cox PH model
+
+Efron is default method in R to estimate the survival based on the Cox PH model
+
+```{r}
+data1.cox <- coxph(datas ~ prison + dose + clinic, data = data1)
+summary(data1.cox)
+
+```
+
+column **z** is the ratio between each regression coefficient to its SE. It is a Wald statistic which is asymptotically standard normal under the hypothesis that the corresponding beta is 0.
+
+Other alternatives = Breslow , Exact
+
+Exponentiated coefficients in the second column of the first panel (and in the first column
+of the second panel) of the output are interpretable as multiplicative effects on the hazard or simply as **Hazard Ratio**
+
+## Estimated distribution of survival times based on Cox PH model
+
+The survfit function estimates S(t), by default at the **mean values of the covariates**.
+
+```{r}
+survfit(data1.cox)
+summary(survfit(data1.cox))
+```
+
+The plot method for objects returned by survfit graphs the estimated surivival function, along
+with a point-wise 95-percent confidence band.
+
+```{r}
+plot(survfit(data1.cox),
+     xlab = 'times', ylab = 'proportion status == 1')
+```
+
+
+
+## Checking the PH assumption
+
+Tests and graphical diagnostics for proportional hazards may be based on the scaled Schoenfeld
+residuals; these can be obtained directly as *residuals(model, "scaledsch")*, where model is a
+*coxph* model object. The matrix returned by residuals has one column for each covariate in
+the model. More conveniently, the cox.zph function calculates tests of the proportional-hazards
+assumption for each covariate, by correlating the corresponding set of scaled Schoenfeld residuals
+
+### Using graphical methods
+
+We will use *cox.zph*
+
+It computes a test for each covariate, along with a global test for the model as a whole
+
+```{r}
+cox.zph(data1.cox)
+```
+
+Strong evidence of non-proportional hazards for the whole model and for covariate *age*
+
+Get the detailed plots after *cox.zph*. Plotting the object returned by cox.zph produces graphs of the scaled Schoenfeld residuals against transformed time.  Systematic departures from a horizontal line are indicative of
+non-proportional hazards.
+
+```{r}
+plot(cox.zph(data1.cox))
+
+```
+
+
+
+## Modification if a model violates PH assumption 
+
+An alternative to incorporating an interaction in the model is to divide the data into strata based
+on the value of one or more covariates. Each stratum is permitted to have a different baseline hazard
+function, while the coefficients of the remaining covariates are assumed to be constant across strata.
+An advantage of this approach is that we do not have to assume a particular form of interaction
+between the stratifying covariates and time. A disadvantage is the resulting inability to examine
+the effects of the stratifying covariates. Stratification is most natural when a covariate takes on
+only a few distinct values, and when the effect of the stratifying variable is not of direct interest
+
+Run, the strata argument for clinic (which has threaten the proportionality)
+
+```{r}
+str.cox <- coxph(datas ~ prison + dose + strata(clinic),
+                 data = data1)
+summary(str.cox)
+```
+
+Any existing violation of PH assumption
+
+```{r}
+cox.zph(str.cox)
+```
+
+Nope. All are good. All fulfill PH assumption. 
+
+## Cox PH model with interaction term
+
+Read page 197 and 198 Applied Survival Analysis by Hosmer and Lemeshow. 
+
+# Prediction
+
+## Predict relative risk 
+
+We use `predict.coxph` to predict the outcomes after running the Cox PH model. For example to obtain the relative risk; that is the risk of population of interest (with a set of covariates) against the population average, we can use these:
+
+```{r predictrisk}
+pred_risk <- predict(data1.cox, type = 'risk')
+cbind(head(data1[, c('prison', 'dose', 'clinic')]), 
+      head(pred_risk))
+
+```
+
+## Plot the expected survival probability after Cox model
+
+We can plot the survival probability against time based on the Cox PH model 
+
+```{r plotcox}
+plot(survfit(data1.cox), col=4, 
+     xlab = 'time', ylab = 'survival prob', main = 'survival prob against time based on Cox model')
+
+```
+
+
+# Model assessment
+
+## Influential observation
+
+Check the dfbeta values
+
+```{r}
+dfbeta <- residuals(data1.cox, type="dfbeta")
+par(mfrow=c(2, 2))
+for (j in 1:3) {plot(dfbeta[, j], ylab=names(coef(data1.cox))[j])
+abline(h=0, lty=2)
+}
+
+```
+
+Summarize the dfbetas values
+
+```{r}
+names(coef(data1.cox))
+summary(dfbeta)
+```
+
+Plot the dfbetas values
+
+```{r}
+plot(dfbeta[,1]) #prison
+plot(dfbeta[,2]) #dose
+plot(dfbeta[,3]) #clinic
+
+```
+
+# Additional tutorial
+
+method 1
+
+```{r}
+plot(surv.clin,fun='cloglog',
+    xlab='time(days) using log scale', ylab='log-log survival prob',
+    main='log-log curves by clinics')
+```
+
+
+Looks the curves cross each other. This indicate model violate PH assumption
+
+## Using statistical test
+
+```{r}
+test.ph <- coxph(datas ~ prison + dose + clinic, data = data1)
+test.ph2 <- cox.zph(test.ph, transform = rank)
+test.ph2
+# var = clinic means residuals should pertain to the variable clinic
+plot(test.ph2, se=FALSE, vsr = "clinic")
+
+```
+
+# Running stratified Cox model
+
+When models violate PH assumption. in our case, 'clinic' does violate PH assumption but others are not. So we do stratified Cox model
+
+```{r}
+surv.strata <- coxph(datas ~ prison + dose + strata(clinic), data = data1)
+summary(surv.strata)
+```
+
+# Running stratified Cox model with interaction
+
+```{r}
+surv.strata.ia <- coxph(datas ~ prison + dose + clinic:dose + clinic:prison + strata(clinic), data=data1)
+summary(surv.strata.ia)
+```
+
+Calculating the HR
+
+If we want to calculate the HR betwwen PRISON=1 vs PRISON=0 for CLINIC=2, then one way is by making CLINIC equals 0. So when CLINIC==2, then CLINIC2==0. 
+
+```{r}
+data1$clinic2<- (as.numeric(data1$clinic)) - 1
+summary(data1$clinic2)
+head(as.numeric(data1$clinic))
+surv.strata.ia2 <- coxph(datas ~ prison + dose +  clinic2:dose + clinic2:(as.numeric(prison)) +
+                       strata(clinic2),data=data1)
+summary(surv.strata.ia2)
+```
+
+# References:
+
+1.  <https://socserv.socsci.mcmaster.ca/jfox/Books/Companion/appendix/Appendix-Cox-Regression.pdf>
+2. Reference for calculating the relative risk <http://stats.stackexchange.com/questions/44896/how-to-interpret-the-output-of-predict-coxph>
+3.  Another reference for predicting the outcomes after Cox model <http://datamining.togaware.com/survivor/Lung1.html>

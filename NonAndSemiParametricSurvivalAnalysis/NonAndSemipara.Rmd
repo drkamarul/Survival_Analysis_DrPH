@@ -1,0 +1,172 @@
+---
+title: "Non And Semi Parametric Survival Analysis"
+author: "Kamarul Imran Musa"
+date: "18 April 2016"
+output: 
+  pdf_document:
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prepare folder and file
+
+```{r}
+setwd("E:/Epi_Stat_Matters/LectureNotes2015/Survival-Analysis/survival-analysis-DrPH-epid-2015/Practicals/NonAndSemiParametricSurvivalAnalysis")
+list.files()
+```
+
+# Read data
+
+```{r}
+library(foreign)
+data1<-read.dta('addicts.dta',convert.factors = T)
+```
+
+# Load library survival
+
+```{r}
+library(survival)
+```
+
+# Declare file as a survival data format
+
+```{r}
+datas<-Surv(time=data1$survt,event=data1$status==1)
+summary(datas)
+head(datas,50)
+head(data1,50)
+```
+
++ sign is for censored observation
+
+# Estimate crude (unadjusted) survival functions for all 
+
+Using intercept-only model to obtain Kaplan-Meier survival estimates for all event times. And also for a specific time.
+
+```{r}
+surv.fit<-survfit(datas~1)
+summary(surv.fit)
+summary(surv.fit,times = 100)
+```
+
+# Estimate crude (unadjusted) survival functions for strata
+
+```{r}
+surv.clin<-survfit(datas~clinic, data = data1)
+summary(surv.clin)
+summary(surv.clin,times = 100)
+```
+
+# Plots
+
+```{r}
+plot(surv.fit, xlab='survival times (days)', ylab='survival prob')
+plot(surv.clin, lty=c('solid','dashed'), col=c('black','red'))
+  legend('topright',c('clinic 1','clinic 2'),lty=c('solid','dashed'), col=c('black','red'))
+```
+
+# Check for survival difference
+
+Default is log-rank test
+
+```{r}
+survdiff(datas~clinic, data = data1)
+```
+
+# Cox PH model
+
+Efron is default method
+
+```{r}
+data1.cox<-coxph(datas~prison+dose+clinic,data=data1)
+summary(data1.cox)
+```
+
+Other alternatives = Breslow , Exact
+
+# Checking PH assumption
+
+## Using graphical methods
+
+Check PH assumption for clinic
+
+method 1
+
+```{r}
+plot(surv.clin,fun='cloglog',
+    xlab='time(days) using log scale', ylab='log-log survival prob',
+    main='log-log curves by clinics')
+```
+
+method 2
+
+```{r}
+surv.clin2<-summary(surv.clin)
+surv.clin2
+surv.clin3<-data.frame(surv.clin2$strata,surv.clin2$time,surv.clin2$surv)
+surv.clin3
+#give column names
+colnames(surv.clin3)<-c('clinic','time','survival')
+surv.clin3[1:5,]
+
+#stratify
+clinic1<-surv.clin3[surv.clin3$clinic=='clinic=1',]
+clinic1
+clinic2<-surv.clin3[surv.clin3$clinic=='clinic=2',]
+clinic2
+
+plot(clinic1$time,log(-log(clinic1$survival)),xlab='survival time in days',ylab='log-log survival',col='blue', type='l',lty='solid')
+#overlay plots
+par(new=T)
+plot(clinic2$time,log(-log(clinic2$survival)),xlab='survival time in days',ylab='log-log survival',col='red', type='l',lty='dashed')
+#back to default
+par(new=F)
+legend('bottomright', c('Clinic1', 'Clinic2'), lty = c('solid', 'dashed'),col=c
+('blue','red'))
+
+```
+
+Looks the curves cross each other. This indicate model violate PH assumption
+
+## Using statistical test
+
+```{r}
+test.ph<-coxph(datas~prison+dose+clinic,data=data1)
+test.ph2<-cox.zph(test.ph,transform = rank)
+test.ph2
+# var = clinic means residuals should pertain to the variable clinic
+plot(test.ph2,se=FALSE,var='clinic')
+
+```
+
+# Running stratified Cox model
+
+When models violate PH assumption. in our case, 'clinic' does violate PH assumption but others are not. So we do stratified Cox model
+
+```{r}
+surv.strata<-coxph(datas~prison+dose+strata(clinic),data=data1)
+summary(surv.strata)
+```
+
+# Running stratified Cox model with interaction
+
+```{r}
+surv.strata.ia<-coxph(datas~prison+dose+clinic:dose+clinic:prison+strata(clinic),data=data1)
+summary(surv.strata.ia)
+```
+
+Calculating the HR
+
+If we want to calculate the HR betwwen PRISON=1 vs PRISON=0 for CLINIC=2, then one way is by making CLINIC equals 0. So when CLINIC==2, then CLINIC2==0. 
+
+```{r}
+data1$clinic2<-data1$clinic-1
+head(data1$clinic2)
+head(data1$clinic)
+surv.strata.ia2<-coxph(datas~prison+dose+clinic2:prison+clinic2:dose+
+                       strata(clinic2),data=data1)
+summary(surv.strata.ia2)
+```
