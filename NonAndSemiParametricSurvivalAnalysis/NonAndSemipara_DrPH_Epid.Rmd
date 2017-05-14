@@ -3,9 +3,6 @@ title: "Non And Semi Parametric Survival Analysis - DrPH(Epid)"
 author: "Kamarul Imran Musa"
 date: "18 April 2016"
 output: 
-  html_document: 
-    keep_md: yes
-    toc: yes
   pdf_document:
     toc: TRUE
 ---
